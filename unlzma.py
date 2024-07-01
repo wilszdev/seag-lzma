@@ -62,6 +62,27 @@ def main():
     return ERR_OK
 
 
+def lzma_decompress(data: bytes) -> bytes:
+    '''an alternative implementation that works when EOS marker is missing'''
+    results = bytearray()
+    while 1:
+        decompressor = lzma.LZMADecompressor(lzma.FORMAT_AUTO, None, None)
+        try:
+            chunk = decompressor.decompress(data)
+        except lzma.LZMAError:
+            if results:
+                break
+            else:
+                raise
+        results += chunk
+        data = decompressor.unused_data
+        if not data:
+            break
+        if not decompressor.eof:
+            raise lzma.LZMAError('Compressed data ended before the end-of-stream marker was reached')
+    return bytes(results)
+
+
 def decompress(data: bytes) -> bytes:
     if data[:4] != b'LZMA':
         return
@@ -71,7 +92,8 @@ def decompress(data: bytes) -> bytes:
 
     header = struct.pack('<BIQ', params, dictSize, 0xffffffffffffffff)
     payload = header + data[25:25+compressedSize]
-    return lzma.decompress(payload, format=lzma.FORMAT_ALONE)
+
+    return lzma_decompress(payload)
 
 
 if __name__ == '__main__':
